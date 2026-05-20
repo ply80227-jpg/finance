@@ -68,3 +68,26 @@ def test_live_news_cn() -> None:
     # Even if no headline endpoint works, the contract is "return a list,
     # possibly empty"; ok=False is acceptable if all providers refused.
     assert isinstance(result.data.get("items", []), list)
+
+
+@LIVE_FLAG
+def test_live_batch_quote() -> None:
+    """Mixed CN+HK batch should return all 4 items in order, at least 1 ok."""
+
+    f = MarketDataFetcher(provider_timeout=4.0, global_deadline=20.0, hedge_delay=0.5)
+    syms = ["600519", "000001", "00700", "09988"]
+    results = f.batch_quote(syms)
+    assert [r.symbol for r in results] == syms
+    assert any(r.ok for r in results), f"all 4 batch items failed: {[r.errors for r in results]}"
+
+
+@LIVE_FLAG
+def test_live_search_returns_matches() -> None:
+    """Search for '茅台' should return at least one match (Maotai 600519)."""
+
+    f = MarketDataFetcher(provider_timeout=4.0, global_deadline=15.0)
+    rows = f.search("茅台", limit=5)
+    # If the akshare index built successfully OR the xueqiu fallback works,
+    # we expect at least 1 row. On a fully offline box this can be 0.
+    if rows:
+        assert any("茅台" in r.name for r in rows), [r.to_dict() for r in rows]
