@@ -95,3 +95,20 @@ def to_yf_symbol(sym: str, market: str) -> str:
         return f"{digits.zfill(4)}.HK"
     prefix = _cn_exchange_prefix(sym)
     return {"sh": f"{sym}.SS", "sz": f"{sym}.SZ", "bj": f"{sym}.BJ"}[prefix]
+
+
+def to_stooq_symbol(sym: str, market: str) -> str:
+    """Stooq's symbol convention differs from Yahoo's:
+
+    * HK: bare digit code without leading zeros, ``.hk`` lowercase suffix
+      (``700.hk`` for Tencent, ``9988.hk`` for Alibaba). Stooq returns
+      ``N/D`` for the zero-padded ``0700.hk`` form.
+    * CN A-shares: 6-digit code + ``.cn`` suffix regardless of which
+      exchange (``600519.cn``, ``000001.cn``). Stooq does not distinguish
+      Shanghai/Shenzhen/Beijing.
+    """
+
+    if market == "hk":
+        digits = sym.lstrip("0") or "0"
+        return f"{digits}.hk"
+    return f"{sym}.cn"

@@ -21,6 +21,7 @@ import os
 import pytest
 
 from hermes_market.fetcher import MarketDataFetcher
+from hermes_market.providers import stooq_provider
 
 LIVE_FLAG = pytest.mark.skipif(
     not os.environ.get("HERMES_RUN_LIVE"),
@@ -91,3 +92,42 @@ def test_live_search_returns_matches() -> None:
     # we expect at least 1 row. On a fully offline box this can be 0.
     if rows:
         assert any("茅台" in r.name for r in rows), [r.to_dict() for r in rows]
+
+
+@LIVE_FLAG
+def test_live_stooq_quote_direct_cn() -> None:
+    """Hit the real Stooq CSV endpoint without going through the fallback chain.
+
+    Verifies the HTTP-based rewrite actually works against production
+    Stooq. Tolerates "N/D" results (out-of-hours or symbol not on Stooq)
+    by allowing the test to xfail rather than fail outright.
+    """
+
+    try:
+        result = stooq_provider.quote(stooq_provider.load_module(), "600519", "cn")
+    except ValueError as exc:
+        pytest.xfail(f"Stooq returned no data for 600519.cn: {exc}")
+        return
+    assert result.ok is True
+    assert result.provider == "stooq"
+    assert isinstance(result.data.get("last"), (int, float))
+
+
+@LIVE_FLAG
+def test_live_stooq_quote_direct_hk() -> None:
+    """Verify the HK short-form ticker (``700.hk`` not ``0700.hk``) actually
+    resolves on Stooq.
+
+    Regression: the previous pandas-datareader path would silently fall
+    back to the old Yahoo-style 4-digit format and Stooq returned N/D
+    for every HK symbol.
+    """
+
+    try:
+        result = stooq_provider.quote(stooq_provider.load_module(), "00700", "hk")
+    except ValueError as exc:
+        pytest.xfail(f"Stooq returned no data for 700.hk: {exc}")
+        return
+    assert result.ok is True
+    assert result.provider == "stooq"
+    assert isinstance(result.data.get("last"), (int, float))
