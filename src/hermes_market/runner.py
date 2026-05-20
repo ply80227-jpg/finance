@@ -134,7 +134,15 @@ def _run_hedged(
     start = time.monotonic()
     deadline_at = start + global_deadline
 
-    with cf.ThreadPoolExecutor(max_workers=max(2, len(attempts)), thread_name_prefix="hermes-hedge") as ex:
+    # NB: do NOT use ``with ThreadPoolExecutor() as ex:``. The implicit
+    # ``shutdown(wait=True)`` on context exit would block on still-running
+    # provider threads (e.g. a slow akshare call that hasn't hit its
+    # per_provider_timeout yet), dwarfing the win we just secured from a fast
+    # hedged provider. Instead we manage the executor manually and shut it
+    # down with ``wait=False`` on every return path so the caller sees the
+    # latency of the *fastest* provider, not the slowest.
+    ex = cf.ThreadPoolExecutor(max_workers=max(2, len(attempts)), thread_name_prefix="hermes-hedge")
+    try:
         idx = 0
         in_flight: dict[cf.Future, tuple[str, float]] = {}
 
@@ -152,7 +160,6 @@ def _run_hedged(
         while in_flight:
             now = time.monotonic()
             if now >= deadline_at:
-                # Burn the remaining futures; nothing succeeded in time.
                 for f, (name, _) in in_flight.items():
                     _record(errors, name, "global deadline exceeded")
                     with contextlib.suppress(Exception):
@@ -160,7 +167,6 @@ def _run_hedged(
                 in_flight.clear()
                 break
 
-            # Cap each future's wall-clock at per_provider_timeout.
             earliest_kill = min(spawn_t + per_provider_timeout for _, spawn_t in in_flight.values())
             next_hedge_at = (
                 min(spawn_t + hedge_delay for _, spawn_t in in_flight.values()) if idx < len(attempts) else float("inf")
@@ -182,12 +188,10 @@ def _run_hedged(
                     for other in in_flight:
                         with contextlib.suppress(Exception):
                             other.cancel()
-                    in_flight.clear()
                     return res, errors
                 msg = res.error if isinstance(res, FetchResult) and res.error else "provider returned ok=False"
                 _record(errors, name, msg)
 
-            # Time-out the futures whose individual budget has elapsed.
             for f in list(in_flight):
                 name, spawn_t = in_flight[f]
                 if now - spawn_t >= per_provider_timeout:
@@ -196,9 +200,9 @@ def _run_hedged(
                         f.cancel()
                     in_flight.pop(f, None)
 
-            # If nothing is in flight and the hedge window passed (or all
-            # attempts already spawned), launch the next attempt.
             if (not in_flight or now >= next_hedge_at) and idx < len(attempts):
                 _spawn_next()
 
-    return None, errors
+        return None, errors
+    finally:
+        ex.shutdown(wait=False)

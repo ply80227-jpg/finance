@@ -180,3 +180,34 @@ def test_hedged_rejects_non_positive_delay() -> None:
         run_with_fallback([("a", lambda: _ok("a"))], hedge_delay=0)
     with pytest.raises(ValueError):
         run_with_fallback([("a", lambda: _ok("a"))], hedge_delay=-1.0)
+
+
+def test_hedged_returns_before_slow_loser_finishes() -> None:
+    """The caller must see the fastest provider's latency, NOT the slowest.
+
+    Regression for a bug where ``with ThreadPoolExecutor:`` would call
+    ``shutdown(wait=True)`` on return, blocking the caller on the still-running
+    slow provider and erasing the latency gain from hedging.
+    """
+
+    def _slow_loser() -> FetchResult:
+        # Significantly slower than the per_provider_timeout in the test, but
+        # the test must still return before this sleep finishes.
+        time.sleep(2.0)
+        return _ok("slow")
+
+    def _fast_winner() -> FetchResult:
+        time.sleep(0.05)
+        return _ok("fast")
+
+    t0 = time.monotonic()
+    result, _errors = run_with_fallback(
+        [("slow", _slow_loser), ("fast", _fast_winner)],
+        per_provider_timeout=5.0,
+        global_deadline=10.0,
+        hedge_delay=0.1,
+    )
+    elapsed = time.monotonic() - t0
+    assert result is not None and result.provider == "fast"
+    # Was ~2s under the old (broken) shutdown(wait=True) behaviour.
+    assert elapsed < 0.6, f"hedged caller blocked on slow loser: {elapsed:.2f}s"

@@ -1,0 +1,373 @@
+{
+  "quote": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "title": "FetchResult",
+    "description": "Standard envelope returned by quote/history/news.",
+    "type": "object",
+    "required": [
+      "ok",
+      "provider",
+      "symbol",
+      "market",
+      "data",
+      "errors",
+      "schema_version"
+    ],
+    "properties": {
+      "ok": {
+        "type": "boolean"
+      },
+      "provider": {
+        "type": "string",
+        "description": "Which provider served this result, or 'none' on full failure."
+      },
+      "symbol": {
+        "type": "string"
+      },
+      "market": {
+        "type": "string",
+        "enum": [
+          "cn",
+          "hk",
+          ""
+        ]
+      },
+      "data": {
+        "type": "object",
+        "description": "Payload — shape depends on command (see examples).",
+        "additionalProperties": true
+      },
+      "error": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Legacy semicolon-joined error string. Prefer `errors`."
+      },
+      "errors": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "required": [
+            "provider",
+            "message"
+          ],
+          "properties": {
+            "provider": {
+              "type": "string"
+            },
+            "message": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "schema_version": {
+        "type": "integer",
+        "const": 1
+      }
+    }
+  },
+  "batch_quote": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "title": "BatchQuoteResult",
+    "description": "Envelope returned by batch quote. Individual items follow FetchResult.",
+    "type": "object",
+    "required": [
+      "ok",
+      "count",
+      "items",
+      "schema_version"
+    ],
+    "properties": {
+      "ok": {
+        "type": "boolean",
+        "description": "True iff at least one item succeeded. Use per-item `ok` for fine-grained checks."
+      },
+      "count": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "items": {
+        "type": "array",
+        "items": {
+          "$ref": "#/$defs/FetchResult"
+        }
+      },
+      "schema_version": {
+        "type": "integer",
+        "const": 1
+      }
+    },
+    "$defs": {
+      "FetchResult": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "title": "FetchResult",
+        "description": "Standard envelope returned by quote/history/news.",
+        "type": "object",
+        "required": [
+          "ok",
+          "provider",
+          "symbol",
+          "market",
+          "data",
+          "errors",
+          "schema_version"
+        ],
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          },
+          "provider": {
+            "type": "string",
+            "description": "Which provider served this result, or 'none' on full failure."
+          },
+          "symbol": {
+            "type": "string"
+          },
+          "market": {
+            "type": "string",
+            "enum": [
+              "cn",
+              "hk",
+              ""
+            ]
+          },
+          "data": {
+            "type": "object",
+            "description": "Payload — shape depends on command (see examples).",
+            "additionalProperties": true
+          },
+          "error": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Legacy semicolon-joined error string. Prefer `errors`."
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "provider",
+                "message"
+              ],
+              "properties": {
+                "provider": {
+                  "type": "string"
+                },
+                "message": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "schema_version": {
+            "type": "integer",
+            "const": 1
+          }
+        }
+      }
+    }
+  },
+  "history": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "title": "FetchResult",
+    "description": "Standard envelope returned by quote/history/news.",
+    "type": "object",
+    "required": [
+      "ok",
+      "provider",
+      "symbol",
+      "market",
+      "data",
+      "errors",
+      "schema_version"
+    ],
+    "properties": {
+      "ok": {
+        "type": "boolean"
+      },
+      "provider": {
+        "type": "string",
+        "description": "Which provider served this result, or 'none' on full failure."
+      },
+      "symbol": {
+        "type": "string"
+      },
+      "market": {
+        "type": "string",
+        "enum": [
+          "cn",
+          "hk",
+          ""
+        ]
+      },
+      "data": {
+        "type": "object",
+        "description": "Payload — shape depends on command (see examples).",
+        "additionalProperties": true
+      },
+      "error": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Legacy semicolon-joined error string. Prefer `errors`."
+      },
+      "errors": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "required": [
+            "provider",
+            "message"
+          ],
+          "properties": {
+            "provider": {
+              "type": "string"
+            },
+            "message": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "schema_version": {
+        "type": "integer",
+        "const": 1
+      }
+    }
+  },
+  "news": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "title": "FetchResult",
+    "description": "Standard envelope returned by quote/history/news.",
+    "type": "object",
+    "required": [
+      "ok",
+      "provider",
+      "symbol",
+      "market",
+      "data",
+      "errors",
+      "schema_version"
+    ],
+    "properties": {
+      "ok": {
+        "type": "boolean"
+      },
+      "provider": {
+        "type": "string",
+        "description": "Which provider served this result, or 'none' on full failure."
+      },
+      "symbol": {
+        "type": "string"
+      },
+      "market": {
+        "type": "string",
+        "enum": [
+          "cn",
+          "hk",
+          ""
+        ]
+      },
+      "data": {
+        "type": "object",
+        "description": "Payload — shape depends on command (see examples).",
+        "additionalProperties": true
+      },
+      "error": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Legacy semicolon-joined error string. Prefer `errors`."
+      },
+      "errors": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "required": [
+            "provider",
+            "message"
+          ],
+          "properties": {
+            "provider": {
+              "type": "string"
+            },
+            "message": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "schema_version": {
+        "type": "integer",
+        "const": 1
+      }
+    }
+  },
+  "search": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "title": "SearchResult",
+    "description": "Envelope returned by search.",
+    "type": "object",
+    "required": [
+      "ok",
+      "query",
+      "count",
+      "items",
+      "schema_version"
+    ],
+    "properties": {
+      "ok": {
+        "type": "boolean"
+      },
+      "query": {
+        "type": "string"
+      },
+      "count": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "items": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "required": [
+            "symbol",
+            "name",
+            "market"
+          ],
+          "properties": {
+            "symbol": {
+              "type": "string",
+              "description": "Canonical code (zero-padded for HK)."
+            },
+            "name": {
+              "type": "string",
+              "description": "Chinese (or English) company name."
+            },
+            "market": {
+              "type": "string",
+              "enum": [
+                "cn",
+                "hk"
+              ]
+            },
+            "exchange": {
+              "type": "string",
+              "description": "Sub-market: 'sh', 'sz', 'bj' for CN; 'hk' for HK."
+            }
+          }
+        }
+      },
+      "schema_version": {
+        "type": "integer",
+        "const": 1
+      }
+    }
+  }
+}

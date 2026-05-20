@@ -1,0 +1,546 @@
+{
+  "format": "openai",
+  "tools": [
+    {
+      "type": "function",
+      "function": {
+        "name": "quote",
+        "description": "Fetch a real-time price snapshot for a single A-share or HK stock. Returns last price, open/high/low/prev_close, volume, turnover, as_of, and the provider that served the request.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "symbol": {
+              "type": "string",
+              "description": "Stock code. CN A-shares: 6 digits (e.g. '600519' Maotai, '000001' Ping An, '300750' CATL, '430047' BJ). HK: 4-5 digits (e.g. '00700' Tencent, '09988' Alibaba). Market is auto-detected from the code prefix unless you pass `market` explicitly."
+            },
+            "market": {
+              "type": "string",
+              "enum": [
+                "cn",
+                "hk"
+              ],
+              "description": "Override the auto-detected market. Optional."
+            }
+          },
+          "required": [
+            "symbol"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "batch_quote",
+        "description": "Fetch real-time price snapshots for many symbols concurrently. Returns a list of per-symbol results; individual failures do not fail the batch. Use this when comparing positions or building a portfolio view in one shot.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "symbols": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "minItems": 1,
+              "maxItems": 50,
+              "description": "List of stock codes to fetch in parallel. Each symbol follows the same rules as `quote.symbol`. Market is auto-detected per symbol; mixed CN/HK lists are fine."
+            },
+            "market": {
+              "type": "string",
+              "enum": [
+                "cn",
+                "hk"
+              ],
+              "description": "Force-apply this market to every symbol. Usually omit."
+            }
+          },
+          "required": [
+            "symbols"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "history",
+        "description": "Fetch daily K-line history (OHLCV) for a single stock between `start` and `end` (inclusive).",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "symbol": {
+              "type": "string",
+              "description": "Stock code (same format as `quote.symbol`)."
+            },
+            "start": {
+              "type": "string",
+              "description": "Inclusive start date, ISO format 'YYYY-MM-DD'.",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            },
+            "end": {
+              "type": "string",
+              "description": "Inclusive end date, ISO format 'YYYY-MM-DD'.",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            },
+            "market": {
+              "type": "string",
+              "enum": [
+                "cn",
+                "hk"
+              ]
+            }
+          },
+          "required": [
+            "symbol",
+            "start",
+            "end"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "news",
+        "description": "Fetch finance news headlines. With `symbol`, returns news filtered to that stock (HK-with-symbol routes to xueqiu); without, returns market-wide news from akshare/xueqiu/sina.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "description": "Max number of headlines to return."
+            },
+            "symbol": {
+              "type": "string",
+              "description": "Optional: filter news to a specific stock. Omit for market-wide news."
+            },
+            "market": {
+              "type": "string",
+              "enum": [
+                "cn",
+                "hk"
+              ]
+            }
+          },
+          "required": [],
+          "additionalProperties": false
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "search",
+        "description": "Resolve a natural-language company name or ticker substring to a list of candidate (code, name, market) tuples. Use this BEFORE calling quote/history/news when the user mentions a stock by name instead of code.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "query": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Natural-language query: company name (Chinese or English), ticker substring, or full code. E.g. '腾讯', 'tencent', '00700', 'maotai', '茅台'."
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "default": 10,
+              "description": "Max matches to return."
+            },
+            "market": {
+              "type": "string",
+              "enum": [
+                "cn",
+                "hk"
+              ],
+              "description": "Restrict search to one market. Omit to search both."
+            }
+          },
+          "required": [
+            "query"
+          ],
+          "additionalProperties": false
+        }
+      }
+    }
+  ],
+  "output_schemas": {
+    "quote": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "title": "FetchResult",
+      "description": "Standard envelope returned by quote/history/news.",
+      "type": "object",
+      "required": [
+        "ok",
+        "provider",
+        "symbol",
+        "market",
+        "data",
+        "errors",
+        "schema_version"
+      ],
+      "properties": {
+        "ok": {
+          "type": "boolean"
+        },
+        "provider": {
+          "type": "string",
+          "description": "Which provider served this result, or 'none' on full failure."
+        },
+        "symbol": {
+          "type": "string"
+        },
+        "market": {
+          "type": "string",
+          "enum": [
+            "cn",
+            "hk",
+            ""
+          ]
+        },
+        "data": {
+          "type": "object",
+          "description": "Payload — shape depends on command (see examples).",
+          "additionalProperties": true
+        },
+        "error": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Legacy semicolon-joined error string. Prefer `errors`."
+        },
+        "errors": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "provider",
+              "message"
+            ],
+            "properties": {
+              "provider": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "schema_version": {
+          "type": "integer",
+          "const": 1
+        }
+      }
+    },
+    "batch_quote": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "title": "BatchQuoteResult",
+      "description": "Envelope returned by batch quote. Individual items follow FetchResult.",
+      "type": "object",
+      "required": [
+        "ok",
+        "count",
+        "items",
+        "schema_version"
+      ],
+      "properties": {
+        "ok": {
+          "type": "boolean",
+          "description": "True iff at least one item succeeded. Use per-item `ok` for fine-grained checks."
+        },
+        "count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/FetchResult"
+          }
+        },
+        "schema_version": {
+          "type": "integer",
+          "const": 1
+        }
+      },
+      "$defs": {
+        "FetchResult": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "title": "FetchResult",
+          "description": "Standard envelope returned by quote/history/news.",
+          "type": "object",
+          "required": [
+            "ok",
+            "provider",
+            "symbol",
+            "market",
+            "data",
+            "errors",
+            "schema_version"
+          ],
+          "properties": {
+            "ok": {
+              "type": "boolean"
+            },
+            "provider": {
+              "type": "string",
+              "description": "Which provider served this result, or 'none' on full failure."
+            },
+            "symbol": {
+              "type": "string"
+            },
+            "market": {
+              "type": "string",
+              "enum": [
+                "cn",
+                "hk",
+                ""
+              ]
+            },
+            "data": {
+              "type": "object",
+              "description": "Payload — shape depends on command (see examples).",
+              "additionalProperties": true
+            },
+            "error": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "Legacy semicolon-joined error string. Prefer `errors`."
+            },
+            "errors": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "provider",
+                  "message"
+                ],
+                "properties": {
+                  "provider": {
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "schema_version": {
+              "type": "integer",
+              "const": 1
+            }
+          }
+        }
+      }
+    },
+    "history": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "title": "FetchResult",
+      "description": "Standard envelope returned by quote/history/news.",
+      "type": "object",
+      "required": [
+        "ok",
+        "provider",
+        "symbol",
+        "market",
+        "data",
+        "errors",
+        "schema_version"
+      ],
+      "properties": {
+        "ok": {
+          "type": "boolean"
+        },
+        "provider": {
+          "type": "string",
+          "description": "Which provider served this result, or 'none' on full failure."
+        },
+        "symbol": {
+          "type": "string"
+        },
+        "market": {
+          "type": "string",
+          "enum": [
+            "cn",
+            "hk",
+            ""
+          ]
+        },
+        "data": {
+          "type": "object",
+          "description": "Payload — shape depends on command (see examples).",
+          "additionalProperties": true
+        },
+        "error": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Legacy semicolon-joined error string. Prefer `errors`."
+        },
+        "errors": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "provider",
+              "message"
+            ],
+            "properties": {
+              "provider": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "schema_version": {
+          "type": "integer",
+          "const": 1
+        }
+      }
+    },
+    "news": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "title": "FetchResult",
+      "description": "Standard envelope returned by quote/history/news.",
+      "type": "object",
+      "required": [
+        "ok",
+        "provider",
+        "symbol",
+        "market",
+        "data",
+        "errors",
+        "schema_version"
+      ],
+      "properties": {
+        "ok": {
+          "type": "boolean"
+        },
+        "provider": {
+          "type": "string",
+          "description": "Which provider served this result, or 'none' on full failure."
+        },
+        "symbol": {
+          "type": "string"
+        },
+        "market": {
+          "type": "string",
+          "enum": [
+            "cn",
+            "hk",
+            ""
+          ]
+        },
+        "data": {
+          "type": "object",
+          "description": "Payload — shape depends on command (see examples).",
+          "additionalProperties": true
+        },
+        "error": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Legacy semicolon-joined error string. Prefer `errors`."
+        },
+        "errors": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "provider",
+              "message"
+            ],
+            "properties": {
+              "provider": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "schema_version": {
+          "type": "integer",
+          "const": 1
+        }
+      }
+    },
+    "search": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "title": "SearchResult",
+      "description": "Envelope returned by search.",
+      "type": "object",
+      "required": [
+        "ok",
+        "query",
+        "count",
+        "items",
+        "schema_version"
+      ],
+      "properties": {
+        "ok": {
+          "type": "boolean"
+        },
+        "query": {
+          "type": "string"
+        },
+        "count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "symbol",
+              "name",
+              "market"
+            ],
+            "properties": {
+              "symbol": {
+                "type": "string",
+                "description": "Canonical code (zero-padded for HK)."
+              },
+              "name": {
+                "type": "string",
+                "description": "Chinese (or English) company name."
+              },
+              "market": {
+                "type": "string",
+                "enum": [
+                  "cn",
+                  "hk"
+                ]
+              },
+              "exchange": {
+                "type": "string",
+                "description": "Sub-market: 'sh', 'sz', 'bj' for CN; 'hk' for HK."
+              }
+            }
+          }
+        },
+        "schema_version": {
+          "type": "integer",
+          "const": 1
+        }
+      }
+    }
+  }
+}

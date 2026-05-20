@@ -1,0 +1,326 @@
+[
+  {
+    "symbol": "600519",
+    "mode": "serial",
+    "hedge_delay": null,
+    "ok": true,
+    "provider": "yfinance",
+    "elapsed_ms": 4248.3,
+    "errors": []
+  },
+  {
+    "symbol": "600519",
+    "mode": "serial",
+    "hedge_delay": null,
+    "ok": true,
+    "provider": "yfinance",
+    "elapsed_ms": 4249.0,
+    "errors": []
+  },
+  {
+    "symbol": "600519",
+    "mode": "serial",
+    "hedge_delay": null,
+    "ok": true,
+    "provider": "yfinance",
+    "elapsed_ms": 4244.5,
+    "errors": []
+  },
+  {
+    "symbol": "600519",
+    "mode": "hedge-2.0",
+    "hedge_delay": 2.0,
+    "ok": true,
+    "provider": "yfinance",
+    "elapsed_ms": 2259.8,
+    "errors": []
+  },
+  {
+    "symbol": "600519",
+    "mode": "hedge-2.0",
+    "hedge_delay": 2.0,
+    "ok": true,
+    "provider": "yfinance",
+    "elapsed_ms": 2246.3,
+    "errors": []
+  },
+  {
+    "symbol": "600519",
+    "mode": "hedge-2.0",
+    "hedge_delay": 2.0,
+    "ok": true,
+    "provider": "yfinance",
+    "elapsed_ms": 2239.4,
+    "errors": []
+  },
+  {
+    "symbol": "600519",
+    "mode": "hedge-0.5",
+    "hedge_delay": 0.5,
+    "ok": true,
+    "provider": "yfinance",
+    "elapsed_ms": 758.4,
+    "errors": []
+  },
+  {
+    "symbol": "600519",
+    "mode": "hedge-0.5",
+    "hedge_delay": 0.5,
+    "ok": true,
+    "provider": "yfinance",
+    "elapsed_ms": 755.9,
+    "errors": []
+  },
+  {
+    "symbol": "600519",
+    "mode": "hedge-0.5",
+    "hedge_delay": 0.5,
+    "ok": true,
+    "provider": "yfinance",
+    "elapsed_ms": 751.9,
+    "errors": []
+  },
+  {
+    "symbol": "000001",
+    "mode": "serial",
+    "hedge_delay": null,
+    "ok": true,
+    "provider": "yfinance",
+    "elapsed_ms": 4260.0,
+    "errors": []
+  },
+  {
+    "symbol": "000001",
+    "mode": "serial",
+    "hedge_delay": null,
+    "ok": true,
+    "provider": "yfinance",
+    "elapsed_ms": 4277.0,
+    "errors": []
+  },
+  {
+    "symbol": "000001",
+    "mode": "serial",
+    "hedge_delay": null,
+    "ok": true,
+    "provider": "yfinance",
+    "elapsed_ms": 4249.0,
+    "errors": []
+  },
+  {
+    "symbol": "000001",
+    "mode": "hedge-2.0",
+    "hedge_delay": 2.0,
+    "ok": true,
+    "provider": "yfinance",
+    "elapsed_ms": 2285.5,
+    "errors": []
+  },
+  {
+    "symbol": "000001",
+    "mode": "hedge-2.0",
+    "hedge_delay": 2.0,
+    "ok": true,
+    "provider": "akshare",
+    "elapsed_ms": 2171.5,
+    "errors": []
+  },
+  {
+    "symbol": "000001",
+    "mode": "hedge-2.0",
+    "hedge_delay": 2.0,
+    "ok": true,
+    "provider": "yfinance",
+    "elapsed_ms": 2252.5,
+    "errors": []
+  },
+  {
+    "symbol": "000001",
+    "mode": "hedge-0.5",
+    "hedge_delay": 0.5,
+    "ok": true,
+    "provider": "yfinance",
+    "elapsed_ms": 766.2,
+    "errors": []
+  },
+  {
+    "symbol": "000001",
+    "mode": "hedge-0.5",
+    "hedge_delay": 0.5,
+    "ok": true,
+    "provider": "yfinance",
+    "elapsed_ms": 800.4,
+    "errors": []
+  },
+  {
+    "symbol": "000001",
+    "mode": "hedge-0.5",
+    "hedge_delay": 0.5,
+    "ok": true,
+    "provider": "yfinance",
+    "elapsed_ms": 642.2,
+    "errors": []
+  },
+  {
+    "symbol": "00700",
+    "mode": "serial",
+    "hedge_delay": null,
+    "ok": true,
+    "provider": "yfinance",
+    "elapsed_ms": 4244.3,
+    "errors": []
+  },
+  {
+    "symbol": "00700",
+    "mode": "serial",
+    "hedge_delay": null,
+    "ok": true,
+    "provider": "yfinance",
+    "elapsed_ms": 4234.5,
+    "errors": []
+  },
+  {
+    "symbol": "00700",
+    "mode": "serial",
+    "hedge_delay": null,
+    "ok": true,
+    "provider": "yfinance",
+    "elapsed_ms": 4179.8,
+    "errors": []
+  },
+  {
+    "symbol": "00700",
+    "mode": "hedge-2.0",
+    "hedge_delay": 2.0,
+    "ok": true,
+    "provider": "yfinance",
+    "elapsed_ms": 2141.3,
+    "errors": []
+  },
+  {
+    "symbol": "00700",
+    "mode": "hedge-2.0",
+    "hedge_delay": 2.0,
+    "ok": true,
+    "provider": "yfinance",
+    "elapsed_ms": 2163.2,
+    "errors": []
+  },
+  {
+    "symbol": "00700",
+    "mode": "hedge-2.0",
+    "hedge_delay": 2.0,
+    "ok": true,
+    "provider": "yfinance",
+    "elapsed_ms": 2244.5,
+    "errors": []
+  },
+  {
+    "symbol": "00700",
+    "mode": "hedge-0.5",
+    "hedge_delay": 0.5,
+    "ok": true,
+    "provider": "yfinance",
+    "elapsed_ms": 749.1,
+    "errors": []
+  },
+  {
+    "symbol": "00700",
+    "mode": "hedge-0.5",
+    "hedge_delay": 0.5,
+    "ok": true,
+    "provider": "yfinance",
+    "elapsed_ms": 762.9,
+    "errors": []
+  },
+  {
+    "symbol": "00700",
+    "mode": "hedge-0.5",
+    "hedge_delay": 0.5,
+    "ok": true,
+    "provider": "yfinance",
+    "elapsed_ms": 747.5,
+    "errors": []
+  },
+  {
+    "symbol": "09988",
+    "mode": "serial",
+    "hedge_delay": null,
+    "ok": true,
+    "provider": "yfinance",
+    "elapsed_ms": 4232.2,
+    "errors": []
+  },
+  {
+    "symbol": "09988",
+    "mode": "serial",
+    "hedge_delay": null,
+    "ok": true,
+    "provider": "yfinance",
+    "elapsed_ms": 4237.2,
+    "errors": []
+  },
+  {
+    "symbol": "09988",
+    "mode": "serial",
+    "hedge_delay": null,
+    "ok": true,
+    "provider": "yfinance",
+    "elapsed_ms": 4224.3,
+    "errors": []
+  },
+  {
+    "symbol": "09988",
+    "mode": "hedge-2.0",
+    "hedge_delay": 2.0,
+    "ok": true,
+    "provider": "yfinance",
+    "elapsed_ms": 2233.9,
+    "errors": []
+  },
+  {
+    "symbol": "09988",
+    "mode": "hedge-2.0",
+    "hedge_delay": 2.0,
+    "ok": true,
+    "provider": "yfinance",
+    "elapsed_ms": 2216.5,
+    "errors": []
+  },
+  {
+    "symbol": "09988",
+    "mode": "hedge-2.0",
+    "hedge_delay": 2.0,
+    "ok": true,
+    "provider": "yfinance",
+    "elapsed_ms": 2211.6,
+    "errors": []
+  },
+  {
+    "symbol": "09988",
+    "mode": "hedge-0.5",
+    "hedge_delay": 0.5,
+    "ok": true,
+    "provider": "yfinance",
+    "elapsed_ms": 646.7,
+    "errors": []
+  },
+  {
+    "symbol": "09988",
+    "mode": "hedge-0.5",
+    "hedge_delay": 0.5,
+    "ok": true,
+    "provider": "yfinance",
+    "elapsed_ms": 730.5,
+    "errors": []
+  },
+  {
+    "symbol": "09988",
+    "mode": "hedge-0.5",
+    "hedge_delay": 0.5,
+    "ok": true,
+    "provider": "yfinance",
+    "elapsed_ms": 722.6,
+    "errors": []
+  }
+]
