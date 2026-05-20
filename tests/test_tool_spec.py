@@ -94,9 +94,8 @@ class TestToolSpec:
     def test_static_file_matches_render(self, fmt: str, filename: str) -> None:
         path = TOOLS_DIR / filename
         on_disk = json.loads(path.read_text("utf-8"))
-        assert on_disk == render(
-            fmt
-        ), f"{filename} is stale; regenerate with `python -m hermes_market.cli tools --format {fmt}`."
+        msg = f"{filename} stale; rerun `hermes-market tools --format {fmt}`."
+        assert on_disk == render(fmt), msg
 
     def test_static_output_schemas_match(self) -> None:
         on_disk = json.loads((TOOLS_DIR / "output_schemas.json").read_text("utf-8"))
