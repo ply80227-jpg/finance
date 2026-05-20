@@ -14,8 +14,45 @@
 
 ## 安装
 
+仓库现已支持作为 Python 包安装（推荐）；老的 `python hermes_market_data.py` 入口仍然可用（通过同名 shim 转发到 `hermes_market.cli`）。
+
 ```bash
-pip install akshare yfinance baostock pandas pandas_datareader
+# 选项 A：包安装（推荐，自动注册 hermes-market 控制台命令）
+pip install -e .
+
+# 选项 B：仅装运行时依赖（用于直接调用 hermes_market_data.py 时）
+pip install -r requirements.txt
+
+# 选项 C：开发环境（含 ruff / pytest / pre-commit）
+pip install -r requirements-dev.txt
+pre-commit install
+```
+
+## 代码结构
+
+```
+finance/
+├── hermes_market_data.py     # 向后兼容 shim,转发到 hermes_market.cli
+├── pyproject.toml            # 包定义 + ruff/pytest 配置
+├── requirements.txt          # 运行时依赖
+├── requirements-dev.txt      # 开发依赖(ruff/pytest/pre-commit)
+├── .pre-commit-config.yaml   # 提交前钩子(ruff lint/format + 通用检查)
+├── .github/workflows/ci.yml  # CI: ruff + pytest
+├── src/hermes_market/
+│   ├── cli.py                # argparse + 顶层异常兜底,产出统一 JSON
+│   ├── fetcher.py            # 多源 fallback 编排器
+│   ├── models.py             # FetchResult + fail_result(含 schema_version)
+│   ├── normalize.py          # 市场识别 + 上交/深交/北交所路由
+│   ├── cache.py              # TTL 内存缓存 + Xueqiu cookie 磁盘缓存
+│   ├── utils.py              # to_float / utc_now_iso / retry
+│   └── providers/
+│       ├── akshare_provider.py
+│       ├── yfinance_provider.py
+│       ├── xueqiu_provider.py   # 含 XueqiuClient
+│       ├── baostock_provider.py
+│       ├── stooq_provider.py
+│       └── sina_rss.py
+└── tests/                    # 单测(无网络,全部 mock 第三方)
 ```
 
 ## 用法
@@ -23,8 +60,13 @@ pip install akshare yfinance baostock pandas pandas_datareader
 ### 1) 最新行情
 
 ```bash
+# 通过 shim 脚本(向后兼容)
 python hermes_market_data.py quote --symbol 600519 --market cn
 python hermes_market_data.py quote --symbol 00700 --market hk
+
+# 或通过控制台命令(pip install -e . 后可用)
+hermes-market quote --symbol 600519 --market cn
+hermes-market quote --symbol 00700 --market hk
 ```
 
 ### 2) 历史日线
@@ -49,9 +91,18 @@ python hermes_market_data.py history --symbol 00700 --market hk --start 2025-01-
     "turnover": 123456789.0,
     "timestamp": "2026-05-07T10:00:00Z"
   },
-  "error": null
+  "error": null,
+  "errors": [],
+  "schema_version": 1
 }
 ```
+
+新增字段说明：
+
+- `schema_version`：输出 schema 版本号，未来字段变更时方便上游兼容。
+- `errors`：结构化失败列表（每条 `{provider, message}`），失败时记录每一跳 fallback 的报错，便于排障。`error` 字段保留为 `"; "` 拼接的字符串以维持兼容。
+- yfinance 路径的 `turnover` 改为 `last * volume` 的近似值，并额外提供 `volume` 字段；其它 provider 仍直接返回成交额（CNY/HKD）。
+- baostock 路径新增 `data.as_of` 字段，标明 T+1 数据对应的真实交易日。
 
 ## Hermes Agent 接入建议
 
@@ -65,16 +116,21 @@ python hermes_market_data.py history --symbol 00700 --market hk --start 2025-01-
 
 ## 常见 symbol 规则
 
-- A 股：`600519`、`000001`（或 `sh600519`/`sz000001`）
-- 港股：`00700`（或 `700` / `0700.HK`）
+- A 股：
+  - 上交所：`600xxx`、`688xxx`（科创板）、`9xxxxx` → `sh.xxx` / `.SS` / `SHxxx`
+  - 深交所：`000xxx`、`300xxx`（创业板） → `sz.xxx` / `.SZ` / `SZxxx`
+  - 北交所：`4xxxxx`、`8xxxxx` → `bj.xxx` / `.BJ` / `BJxxx`
+  - 也可以带前缀：`sh600519`、`sz000001`、`bj430047`
+- 港股：`00700` / `700` / `0700.HK` 都会被自动识别。
 
 
 
 ## T+1 说明（baostock）
 
 - `baostock` 仅用于 A 股（`market=cn`），不用于港股。
-- 作为回退源时，返回数据可能是交易日收盘后的 T+1 可见数据，不适合严格实时场景。
-- 输出 `data.note` 字段会标记 `T+1 delayed via baostock`。
+- 作为回退源时，返回数据是 T+1 可见数据，不适合严格实时场景。
+- 实现会回溯最近 7 天找到最后一个有数据的交易日，返回其收盘行情。
+- 输出 `data.note` 字段标记 `T+1 delayed via baostock`，`data.as_of` 标记实际数据对应的交易日。
 
 
 ## 雪球数据源（GitHub 生态）
