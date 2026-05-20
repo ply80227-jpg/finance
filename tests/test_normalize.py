@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+
 from hermes_market.normalize import (
     detect_market,
     normalize_symbol,

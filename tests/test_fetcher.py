@@ -9,6 +9,7 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
+
 from hermes_market import fetcher as fetcher_mod
 from hermes_market.fetcher import MarketDataFetcher
 from hermes_market.models import FetchResult

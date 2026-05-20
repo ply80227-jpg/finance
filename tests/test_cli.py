@@ -6,6 +6,7 @@ import json
 from typing import Any
 
 import pytest
+
 from hermes_market import cli
 from hermes_market import fetcher as fetcher_mod
 from hermes_market.models import FetchResult
