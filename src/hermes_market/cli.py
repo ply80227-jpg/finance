@@ -1,18 +1,65 @@
-"""CLI entry point. Preserves the historical ``python hermes_market_data.py`` UX."""
+"""CLI entry point. Preserves the historical ``python hermes_market_data.py`` UX.
+
+Concurrency / timeout flags
+---------------------------
+
+* ``--provider-timeout SECONDS`` — max seconds to wait per provider before
+  giving up and moving to the next (default: ``HERMES_PROVIDER_TIMEOUT`` env
+  var or :data:`~hermes_market.fetcher.DEFAULT_PROVIDER_TIMEOUT`).
+* ``--deadline SECONDS`` — hard global deadline for the whole fallback chain
+  (default: ``HERMES_GLOBAL_DEADLINE`` env var or
+  :data:`~hermes_market.fetcher.DEFAULT_GLOBAL_DEADLINE`).
+* ``--hedge-delay SECONDS`` — when set to a positive value, enables hedged
+  concurrent fallback: the next provider is spawned in parallel after the
+  previous one has been pending for this many seconds, and whichever
+  succeeds first wins. Default: ``HERMES_HEDGE_DELAY`` env var or strict
+  sequential.
+"""
 
 from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from dataclasses import asdict
 
-from .fetcher import MarketDataFetcher
+from .fetcher import DEFAULT_GLOBAL_DEADLINE, DEFAULT_PROVIDER_TIMEOUT, MarketDataFetcher
 from .models import FetchResult
+
+
+def _env_float(name: str, default: float | None) -> float | None:
+    raw = os.environ.get(name)
+    if raw is None or raw == "":
+        return default
+    try:
+        return float(raw)
+    except ValueError:
+        return default
 
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="A/HK free market data fetcher with multi-provider fallback")
+    parser.add_argument(
+        "--provider-timeout",
+        type=float,
+        default=_env_float("HERMES_PROVIDER_TIMEOUT", DEFAULT_PROVIDER_TIMEOUT),
+        help="Max seconds per provider attempt (env: HERMES_PROVIDER_TIMEOUT)",
+    )
+    parser.add_argument(
+        "--deadline",
+        type=float,
+        default=_env_float("HERMES_GLOBAL_DEADLINE", DEFAULT_GLOBAL_DEADLINE),
+        help="Hard global deadline for the whole fallback chain (env: HERMES_GLOBAL_DEADLINE)",
+    )
+    parser.add_argument(
+        "--hedge-delay",
+        type=float,
+        default=_env_float("HERMES_HEDGE_DELAY", None),
+        help="Enable hedged concurrent fallback: spawn the next provider after this many seconds. "
+        "Default = sequential. (env: HERMES_HEDGE_DELAY)",
+    )
+
     sub = parser.add_subparsers(dest="cmd", required=True)
 
     p_quote = sub.add_parser("quote", help="Realtime snapshot quote")
@@ -62,7 +109,11 @@ def main(argv: list[str] | None = None) -> int:
         raise e
 
     try:
-        fetcher = MarketDataFetcher()
+        fetcher = MarketDataFetcher(
+            provider_timeout=args.provider_timeout,
+            global_deadline=args.deadline,
+            hedge_delay=args.hedge_delay,
+        )
         if args.cmd == "quote":
             result = fetcher.quote(args.symbol, args.market)
         elif args.cmd == "history":
