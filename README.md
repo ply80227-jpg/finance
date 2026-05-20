@@ -76,6 +76,29 @@ python hermes_market_data.py history --symbol 600519 --start 2025-01-01 --end 20
 python hermes_market_data.py history --symbol 00700 --market hk --start 2025-01-01 --end 2025-01-31
 ```
 
+### 3) 并发 fallback / 超时控制
+
+所有子命令支持三个顶层 flag（也可用同名环境变量），用于约束 fallback 链的尾延迟：
+
+| Flag | 环境变量 | 默认 | 含义 |
+| ---- | -------- | ---- | ---- |
+| `--provider-timeout` | `HERMES_PROVIDER_TIMEOUT` | `6.0` | 每家 provider 最多等待秒数 |
+| `--deadline` | `HERMES_GLOBAL_DEADLINE` | `20.0` | 整条 fallback 链的全局截止时间 |
+| `--hedge-delay` | `HERMES_HEDGE_DELAY` | _未设置_ → 串行 | 设为正数开启 hedged 并发：上一家等待该秒数后还没返回就并发拉起下一家 |
+
+例：
+
+```bash
+# 严格串行(默认行为)
+python hermes_market_data.py quote --symbol 600519
+
+# 上一家 1.5s 没回就并发拉下一家,缩短 P99 尾延迟
+python hermes_market_data.py --hedge-delay 1.5 quote --symbol 00700 --market hk
+
+# 通过环境变量
+HERMES_HEDGE_DELAY=1.5 HERMES_PROVIDER_TIMEOUT=4 python hermes_market_data.py quote --symbol 600519
+```
+
 ## 输出格式（JSON）
 
 ```json

@@ -31,7 +31,53 @@ def _cached_spot(ak, table: str):  # type: ignore[no-untyped-def]
     return df
 
 
+def _bid_ask_dict(df: Any) -> dict[str, str]:
+    """Convert an akshare ``stock_bid_ask_em`` DataFrame (``item``/``value`` columns)
+    to a ``{item: value}`` dict.
+    """
+
+    try:
+        return {str(r["item"]): str(r["value"]) for _, r in df.iterrows()}
+    except Exception as exc:  # noqa: BLE001
+        raise ValueError(f"akshare stock_bid_ask_em returned unexpected shape: {exc}") from exc
+
+
 def quote_cn(ak, sym: str) -> FetchResult:  # type: ignore[no-untyped-def]
+    """Single-stock CN quote via ``stock_bid_ask_em`` (P3 fast path).
+
+    Falls back to the spot-table-scan path if the per-stock endpoint is
+    unavailable on the installed akshare version or rejects the symbol.
+    """
+
+    fn = getattr(ak, "stock_bid_ask_em", None)
+    if fn is not None:
+        try:
+            df = fn(symbol=sym)
+            if df is not None and not df.empty:
+                d = _bid_ask_dict(df)
+                last = to_float(d.get("最新"))
+                if last is not None:
+                    data = {
+                        "name": None,  # bid/ask endpoint omits the company name; left to caller
+                        "last": last,
+                        "change_pct": to_float(d.get("涨幅") or d.get("涨跌幅")),
+                        "turnover": to_float(d.get("成交额")),
+                        "volume": to_float(d.get("成交量")),
+                        "open": to_float(d.get("今开")),
+                        "high": to_float(d.get("最高")),
+                        "low": to_float(d.get("最低")),
+                        "prev_close": to_float(d.get("昨收")),
+                        "timestamp": utc_now_iso(),
+                        "source": "stock_bid_ask_em",
+                    }
+                    return FetchResult(True, "akshare", sym, "cn", data)
+        except Exception:
+            # fall through to spot-table scan below
+            pass
+    return _quote_cn_via_spot(ak, sym)
+
+
+def _quote_cn_via_spot(ak, sym: str) -> FetchResult:  # type: ignore[no-untyped-def]
     spot = _cached_spot(ak, "stock_zh_a_spot_em")
     row = spot.loc[spot["代码"] == sym]
     if row.empty:
@@ -43,6 +89,7 @@ def quote_cn(ak, sym: str) -> FetchResult:  # type: ignore[no-untyped-def]
         "change_pct": to_float(r.get("涨跌幅")),
         "turnover": to_float(r.get("成交额")),
         "timestamp": utc_now_iso(),
+        "source": "stock_zh_a_spot_em",
     }
     return FetchResult(True, "akshare", sym, "cn", data)
 
