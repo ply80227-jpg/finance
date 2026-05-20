@@ -8,6 +8,7 @@ caller's timeout / deadline / hedging settings.
 
 from __future__ import annotations
 
+import concurrent.futures as cf
 from collections.abc import Callable
 
 from .models import FetchResult, fail_result
@@ -22,6 +23,8 @@ from .providers import (
 )
 from .providers.xueqiu_provider import XueqiuClient
 from .runner import Attempt, run_with_fallback
+from .symbol_index import SymbolRow, _search_xueqiu, get_index
+from .symbol_index import search as _search_rows
 
 # Defaults are deliberately conservative; the README recommended an 8-15s
 # end-to-end budget, and we pick 6s per-provider / 20s overall so that the
@@ -164,3 +167,79 @@ class MarketDataFetcher:
             attempts.append(("akshare", lambda: akshare_provider.news(self.ak, limit, symbol_norm, mkt)))
         attempts.append(("sina_rss", lambda: sina_rss.news(limit, symbol_norm)))
         return self._run(attempts, symbol_norm or "", mkt)
+
+    # -------------------------------------------------------------- batch quote
+    def batch_quote(
+        self,
+        symbols: list[str],
+        market: str | None = None,
+        *,
+        max_workers: int = 8,
+    ) -> list[FetchResult]:
+        """Fetch quotes for many symbols concurrently.
+
+        Each symbol runs its own independent fallback chain (so a flaky
+        akshare on one symbol does not affect another). Returns results in
+        the same order as ``symbols``. Individual failures surface as
+        ``ok=False`` items rather than raising.
+        """
+
+        if not symbols:
+            return []
+        # Bound the worker pool to the actual batch size to avoid spawning
+        # idle threads for tiny batches.
+        workers = max(1, min(max_workers, len(symbols)))
+        results: list[FetchResult | None] = [None] * len(symbols)
+
+        def _one(idx_sym: tuple[int, str]) -> tuple[int, FetchResult]:
+            idx, sym = idx_sym
+            try:
+                return idx, self.quote(sym, market)
+            except Exception as exc:  # noqa: BLE001
+                return idx, fail_result(
+                    "none",
+                    sym,
+                    market or "",
+                    [{"provider": "batch", "message": f"{type(exc).__name__}: {exc}"}],
+                )
+
+        with cf.ThreadPoolExecutor(max_workers=workers, thread_name_prefix="hermes-batch") as ex:
+            for idx, res in ex.map(_one, enumerate(symbols)):
+                results[idx] = res
+        # The pool always populates every slot, but help the type checker.
+        return [r if r is not None else fail_result("none", "", "", []) for r in results]
+
+    # ------------------------------------------------------------------ search
+    def search(
+        self,
+        query: str,
+        *,
+        limit: int = 10,
+        market: str | None = None,
+    ) -> list[SymbolRow]:
+        """Resolve a natural-language query to (code, name, market) tuples.
+
+        Uses the local akshare-built index first (24-hour TTL); falls back to
+        xueqiu's ``/v5/stock/search`` HTTP endpoint when the index is empty
+        (e.g. on a fresh box without akshare installed).
+        """
+
+        if not query.strip():
+            return []
+        try:
+            rows = get_index(self.ak)
+        except Exception:  # noqa: BLE001
+            # akshare's spot endpoints can be throttled / connection-reset
+            # from various egress IPs; degrade to the xueqiu fallback below
+            # instead of bubbling the network error up to the agent.
+            rows = []
+        if rows:
+            return _search_rows(query, rows, limit=limit, market=market)
+        # Online fallback: hit xueqiu's search endpoint.
+        try:
+            online = _search_xueqiu(query, self.xq._get_json)
+        except Exception:  # noqa: BLE001
+            online = []
+        if market is not None:
+            online = [r for r in online if r.market == market]
+        return online[:limit]
