@@ -62,13 +62,13 @@ worst-case tail (when akshare is having a bad day).
 | yfinance  | rate-limited | yes      | Returns within ~3-4s including cold-start. Tencent worked once HK symbol was down-padded to 4 digits (`0700.HK`).                                                                                            |
 | xueqiu    | yes       | needs-cookie | Cookie bootstrap returns 403/400 without proper session; cookie-cache will re-bootstrap once it primes.            |
 | baostock  | yes       | yes (T+1)   | Health-check passes; live-quote path uses 7-day lookback and yields the most recent trading day's close.           |
-| stooq     | yes       | NO          | `pandas-datareader` is broken on Python 3.12 (deprecated `distutils.version` / `deprecate_kwarg` signature changed). Treat as a permanent skip until the dependency is replaced. |
+| stooq     | yes       | yes (HTTP CSV) | Replaced `pandas-datareader` with a direct urllib + `csv` implementation (P6). Quote endpoint is free; historical CSV requires `STOOQ_APIKEY`. |
 
 ## How to reproduce
 
 ```bash
 pip install -e ".[dev]"   # or: pip install -r requirements.txt
-pip install akshare yfinance baostock pandas-datareader setuptools
+pip install akshare yfinance baostock setuptools
 
 # Fast 4-symbol sweep (~2-3 min on this box)
 python scripts/bench.py \

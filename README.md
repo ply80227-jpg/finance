@@ -8,7 +8,7 @@
 2. **一级回退：`yfinance`**（免费、稳定度较高）
 3. **二级回退：`xueqiu`**（雪球公开接口，A/H 覆盖较好）
 4. **三级回退：`baostock`**（A 股稳定，但为 T+1 延迟，适合历史/兜底）
-5. **四级回退：`stooq`（通过 `pandas_datareader`）**（免费公开数据，最终兜底）
+5. **四级回退：`stooq`（直接 HTTP CSV）**（免费公开数据，最终兜底；历史 K 线需要 `STOOQ_APIKEY` 环境变量，实时行情免费）
 
 > 说明：以上数据源都可免费使用，但都依赖第三方公开接口，稳定性会受网络和上游策略影响。
 
@@ -176,7 +176,7 @@ resp = openai.chat.completions.create(
 
 ```bash
 pip install -e ".[dev]"
-pip install akshare yfinance baostock pandas-datareader setuptools
+pip install akshare yfinance baostock setuptools
 python scripts/bench.py --symbols 600519,000001,00700,09988 \
     --iters 3 --warmup 1 --provider-timeout 4 --deadline 10
 ```

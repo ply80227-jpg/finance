@@ -8,6 +8,7 @@ from hermes_market.normalize import (
     detect_market,
     normalize_symbol,
     to_baostock_code,
+    to_stooq_symbol,
     to_xq_symbol,
     to_yf_symbol,
 )
@@ -80,3 +81,22 @@ class TestExchangeMapping:
         assert to_yf_symbol("00700", "hk") == "0700.HK"
         assert to_yf_symbol("09988", "hk") == "9988.HK"
         assert to_yf_symbol("00388", "hk") == "0388.HK"
+
+
+class TestStooqSymbol:
+    """Stooq's symbol format diverges from Yahoo's — verify both markets."""
+
+    @pytest.mark.parametrize(
+        ("sym", "market", "expected"),
+        [
+            ("600519", "cn", "600519.cn"),  # Shanghai
+            ("000001", "cn", "000001.cn"),  # Shenzhen
+            ("430047", "cn", "430047.cn"),  # Beijing — stooq still uses .cn
+            ("00700", "hk", "700.hk"),  # Tencent — strip leading zeros
+            ("09988", "hk", "9988.hk"),  # Alibaba
+            ("00388", "hk", "388.hk"),  # HKEX
+            ("0", "hk", "0.hk"),  # degenerate all-zero edge case
+        ],
+    )
+    def test_to_stooq(self, sym: str, market: str, expected: str) -> None:
+        assert to_stooq_symbol(sym, market) == expected
