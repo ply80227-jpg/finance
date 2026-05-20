@@ -99,6 +99,44 @@ python hermes_market_data.py --hedge-delay 1.5 quote --symbol 00700 --market hk
 HERMES_HEDGE_DELAY=1.5 HERMES_PROVIDER_TIMEOUT=4 python hermes_market_data.py quote --symbol 600519
 ```
 
+## Benchmarks
+
+从一台 Devin sandbox VM 实测（2026-05-20，akshare 的 Eastmoney quote 接口在
+该 VM 出口下不稳定，yfinance 健康）。完整结果与原始数据见
+[`scripts/bench_results.md`](scripts/bench_results.md) /
+[`scripts/bench_results.json`](scripts/bench_results.json)。
+
+| mode               | n  | success | p50    | p95    | p99    | mean   |
+| ------------------ | -: | -:      | -:     | -:     | -:     | -:     |
+| serial (默认)      | 12 | 12/12   | 4244ms | 4268ms | 4275ms | 4240ms |
+| `--hedge-delay 2`  | 12 | 12/12   | 2237ms | 2271ms | 2283ms | 2222ms |
+| `--hedge-delay 0.5`| 12 | 12/12   |  750ms |  782ms |  797ms |  736ms |
+
+在主 provider 退化但下游健康的场景下，`--hedge-delay 0.5` 把 p50 / p99
+从 ~4.3s 降到 ~0.8s，约 **5.5×** 提速；成功率不受影响。当主 provider
+健康时 hedge 几乎不会触发，行为退化为串行，开销可忽略。
+
+复现：
+
+```bash
+pip install -e ".[dev]"
+pip install akshare yfinance baostock pandas-datareader setuptools
+python scripts/bench.py --symbols 600519,000001,00700,09988 \
+    --iters 3 --warmup 1 --provider-timeout 4 --deadline 10
+```
+
+### 真实接口冒烟测试
+
+`tests/test_smoke_live.py` 提供 5 个针对真实 provider 的冒烟测试，**默认
+跳过**（不进 CI 门禁）。本地启用：
+
+```bash
+HERMES_RUN_LIVE=1 pytest tests/test_smoke_live.py -v
+```
+
+契约是"至少一家 provider 成功"——单家 provider 失败属正常，5 家全失败才
+是 bug。
+
 ## 输出格式（JSON）
 
 ```json

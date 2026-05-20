@@ -74,4 +74,9 @@ class TestExchangeMapping:
 
     def test_hk_routing(self) -> None:
         assert to_xq_symbol("00700", "hk") == "HK00700"
-        assert to_yf_symbol("00700", "hk") == "00700.HK"
+        # Yahoo Finance HK tickers are 4-digit (e.g. 0700.HK for Tencent,
+        # 9988.HK for Alibaba); the 5-digit form returned by akshare must
+        # be down-padded before handing to yfinance.
+        assert to_yf_symbol("00700", "hk") == "0700.HK"
+        assert to_yf_symbol("09988", "hk") == "9988.HK"
+        assert to_yf_symbol("00388", "hk") == "0388.HK"

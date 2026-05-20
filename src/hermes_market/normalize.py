@@ -87,6 +87,11 @@ def to_baostock_code(sym: str) -> str:
 
 def to_yf_symbol(sym: str, market: str) -> str:
     if market == "hk":
-        return f"{sym}.HK"
+        # Yahoo Finance HK tickers are 4 digits (e.g. ``0700.HK`` for Tencent,
+        # ``9988.HK`` for Alibaba); akshare's 5-digit zero-padded form
+        # (``00700``) returns "possibly delisted" from Yahoo. Drop one
+        # leading zero, then re-pad to 4.
+        digits = sym.lstrip("0") or "0"
+        return f"{digits.zfill(4)}.HK"
     prefix = _cn_exchange_prefix(sym)
     return {"sh": f"{sym}.SS", "sz": f"{sym}.SZ", "bj": f"{sym}.BJ"}[prefix]
