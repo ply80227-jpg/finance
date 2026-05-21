@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import io
 import json
+import os
 import subprocess
 import sys
 import threading
 import time
 from collections.abc import Iterator
-from typing import Any
+from typing import IO, Any
 
 import pytest
 
@@ -348,6 +349,255 @@ class TestProtocol:
 
 
 # ---------------------------------------------------------------------------
+# Streaming MCP client + interactive integration tests
+# ---------------------------------------------------------------------------
+#
+# The unit tests above use StringIO and a single "play all messages then
+# read all responses" model. A real MCP host (Claude Desktop, mcp-cli)
+# instead interleaves writes and reads, and depends on responses being
+# *matched by id*. The helper below models that interactive shape so we
+# can exercise the server end-to-end the way a real host would.
+
+
+class _StreamingMCPClient:
+    """Minimal stdio JSON-RPC 2.0 client used to exercise the server.
+
+    Writes one frame, waits for the response with the matching id, returns
+    its ``result`` (or raises with the ``error``). Notifications are sent
+    fire-and-forget.
+    """
+
+    def __init__(self, write_stream: IO[str], read_stream: IO[str]) -> None:
+        self._write = write_stream
+        self._read = read_stream
+        self._next_id = 0
+        self._lock = threading.Lock()
+
+    def _send(self, msg: dict[str, Any]) -> None:
+        self._write.write(json.dumps(msg, ensure_ascii=False) + "\n")
+        self._write.flush()
+
+    def request(self, method: str, params: dict[str, Any] | None = None, *, timeout: float = 5.0) -> Any:
+        with self._lock:
+            self._next_id += 1
+            msg_id = self._next_id
+        payload: dict[str, Any] = {"jsonrpc": "2.0", "id": msg_id, "method": method}
+        if params is not None:
+            payload["params"] = params
+        self._send(payload)
+        # Read until we see a response for our id (the server runs tool
+        # calls in a worker pool so out-of-order replies are possible).
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            line = self._read.readline()
+            if line == "":
+                raise RuntimeError(f"server closed stdout while awaiting id={msg_id}")
+            line = line.strip()
+            if not line:
+                continue
+            resp = json.loads(line)
+            if resp.get("id") != msg_id:
+                # Not for us — surface as test failure since unit tests
+                # don't currently issue overlapping requests.
+                raise RuntimeError(f"unexpected response id {resp.get('id')!r} (waiting for {msg_id}): {resp}")
+            if "error" in resp:
+                raise RuntimeError(f"server error for {method}: {resp['error']}")
+            return resp.get("result")
+        raise TimeoutError(f"no response for id={msg_id} within {timeout}s")
+
+    def notify(self, method: str, params: dict[str, Any] | None = None) -> None:
+        payload: dict[str, Any] = {"jsonrpc": "2.0", "method": method}
+        if params is not None:
+            payload["params"] = params
+        self._send(payload)
+
+
+class TestInProcessMCPClient:
+    """In-process: spawn the server in a thread, drive it through real OS
+    pipes with the streaming client. CI-safe (uses a _FakeFetcher)."""
+
+    def _start_server_with_pipes(
+        self,
+    ) -> tuple[threading.Thread, _StreamingMCPClient, _FakeFetcher, IO[str], IO[str]]:
+        # Two unidirectional pipes: client → server stdin, server → client stdout.
+        client_to_server_r, client_to_server_w = os.pipe()
+        server_to_client_r, server_to_client_w = os.pipe()
+        server_stdin = os.fdopen(client_to_server_r, "r", buffering=1)
+        server_stdout = os.fdopen(server_to_client_w, "w", buffering=1)
+        client_write = os.fdopen(client_to_server_w, "w", buffering=1)
+        client_read = os.fdopen(server_to_client_r, "r", buffering=1)
+
+        fake = _FakeFetcher()
+        srv = StdioMCPServer(fetcher=fake, stdin=server_stdin, stdout=server_stdout)  # type: ignore[arg-type]
+        thread = threading.Thread(target=srv.serve_forever, name="mcp-srv", daemon=True)
+        thread.start()
+        client = _StreamingMCPClient(write_stream=client_write, read_stream=client_read)
+        return thread, client, fake, client_write, client_read
+
+    def _cleanup(
+        self,
+        thread: threading.Thread,
+        client_write: IO[str],
+        client_read: IO[str],
+    ) -> None:
+        # Closing the write end of the client → server pipe sends EOF,
+        # which the server treats as a clean shutdown.
+        try:
+            client_write.close()
+        except Exception:  # noqa: BLE001
+            pass
+        thread.join(timeout=3.0)
+        assert not thread.is_alive(), "server thread did not exit after EOF"
+        try:
+            client_read.close()
+        except Exception:  # noqa: BLE001
+            pass
+
+    def test_full_session_handshake_list_call_shutdown(self) -> None:
+        """A real MCP host's typical message flow, end-to-end."""
+
+        thread, client, fake, client_write, client_read = self._start_server_with_pipes()
+        try:
+            # 1. Handshake — host MUST send initialize first, then
+            #    notifications/initialized before any other request.
+            init = client.request(
+                "initialize",
+                {
+                    "protocolVersion": MCP_PROTOCOL_VERSION,
+                    "capabilities": {},
+                    "clientInfo": {"name": "test", "version": "0"},
+                },
+            )
+            assert init["protocolVersion"] == MCP_PROTOCOL_VERSION
+            assert init["serverInfo"]["name"] == SERVER_NAME
+            client.notify("notifications/initialized")
+
+            # 2. Discovery.
+            listing = client.request("tools/list")
+            names = [t["name"] for t in listing["tools"]]
+            assert names == ["quote", "batch_quote", "history", "news", "search"]
+
+            # 3. Single tool/call (quote).
+            result = client.request(
+                "tools/call",
+                {"name": "quote", "arguments": {"symbol": "600519"}},
+            )
+            assert result["isError"] is False
+            envelope = json.loads(result["content"][0]["text"])
+            assert envelope["ok"] is True
+            assert envelope["symbol"] == "600519"
+
+            # 4. Batch tool/call (different shape — envelope has items[]).
+            batch = client.request(
+                "tools/call",
+                {"name": "batch_quote", "arguments": {"symbols": ["600519", "000001", "00700"]}},
+            )
+            assert batch["isError"] is False
+            batch_env = json.loads(batch["content"][0]["text"])
+            assert batch_env["count"] == 3
+            assert [i["symbol"] for i in batch_env["items"]] == ["600519", "000001", "00700"]
+
+            # 5. resources/read for the output schemas — hosts can pull
+            #    these without shelling out to ``hermes-market tools``.
+            schemas = client.request(
+                "resources/read",
+                {"uri": "hermes://output-schemas"},
+            )
+            parsed = json.loads(schemas["contents"][0]["text"])
+            assert set(parsed) >= {"quote", "batch_quote", "history"}
+
+            # 6. Sanity check: every fake fetcher call we expected fired.
+            call_names = [c[0] for c in fake.calls]
+            assert call_names == ["quote", "batch_quote"]
+        finally:
+            self._cleanup(thread, client_write, client_read)
+
+    def test_concurrent_identical_tool_calls_singleflight(self) -> None:
+        """Two concurrent identical tool/calls must produce two responses
+        but only one upstream fetcher call (single-flight coalescing)."""
+
+        # We need the fake fetcher to be slow enough that both client
+        # requests are in flight at the same time, so the second one
+        # finds the first one's Future already registered.
+        class _SlowFake(_FakeFetcher):
+            def __init__(self) -> None:
+                super().__init__()
+                self._gate = threading.Event()
+
+            def quote(self, symbol: str, market: str | None = None) -> FetchResult:  # type: ignore[override]
+                self._record("quote", symbol, market)
+                self._gate.wait(timeout=2.0)
+                return FetchResult(True, "fake", symbol, market or "cn", {"last": 100.0})
+
+        # Same plumbing as _start_server_with_pipes but using the slow fake.
+        client_to_server_r, client_to_server_w = os.pipe()
+        server_to_client_r, server_to_client_w = os.pipe()
+        server_stdin = os.fdopen(client_to_server_r, "r", buffering=1)
+        server_stdout = os.fdopen(server_to_client_w, "w", buffering=1)
+        client_write = os.fdopen(client_to_server_w, "w", buffering=1)
+        client_read = os.fdopen(server_to_client_r, "r", buffering=1)
+
+        fake = _SlowFake()
+        srv = StdioMCPServer(fetcher=fake, stdin=server_stdin, stdout=server_stdout)  # type: ignore[arg-type]
+        thread = threading.Thread(target=srv.serve_forever, daemon=True)
+        thread.start()
+
+        # The streaming client expects matched responses, so for concurrent
+        # requests we drop down to manual framing.
+        try:
+            # Two identical tools/call frames, written back-to-back before
+            # either response can come back (the server is gated on _gate).
+            for i in (1, 2):
+                client_write.write(
+                    json.dumps(
+                        {
+                            "jsonrpc": "2.0",
+                            "id": i,
+                            "method": "tools/call",
+                            "params": {"name": "quote", "arguments": {"symbol": "600519"}},
+                        }
+                    )
+                    + "\n"
+                )
+            client_write.flush()
+
+            # Give the server a moment to enqueue both into the executor
+            # and have the second observe the first's in-flight Future.
+            time.sleep(0.2)
+            fake._gate.set()
+
+            responses: list[dict[str, Any]] = []
+            for _ in range(2):
+                line = client_read.readline()
+                if not line:
+                    raise RuntimeError("server closed stdout early")
+                responses.append(json.loads(line.strip()))
+
+            ids = sorted(r["id"] for r in responses)
+            assert ids == [1, 2]
+            for r in responses:
+                envelope = json.loads(r["result"]["content"][0]["text"])
+                assert envelope["ok"] is True
+                assert envelope["symbol"] == "600519"
+
+            # Single-flight: the slow fetcher.quote method ran exactly once
+            # even though we issued 2 identical concurrent tools/call frames.
+            quote_calls = [c for c in fake.calls if c[0] == "quote"]
+            assert len(quote_calls) == 1, f"expected 1 underlying quote call, got {quote_calls}"
+        finally:
+            try:
+                client_write.close()  # EOF → server exits cleanly
+            except Exception:  # noqa: BLE001
+                pass
+            thread.join(timeout=3.0)
+            for h in (client_read,):
+                try:
+                    h.close()
+                except Exception:  # noqa: BLE001
+                    pass
+
+
+# ---------------------------------------------------------------------------
 # Subprocess integration test — exercises the real ``hermes-market serve``
 # entry point through actual stdin/stdout pipes.
 # ---------------------------------------------------------------------------
@@ -393,6 +643,93 @@ def test_subprocess_initialize_and_tools_list() -> None:
         "news",
         "search",
     ]
+
+
+# ---------------------------------------------------------------------------
+# Live subprocess + tools/call against real providers — gated on HERMES_RUN_LIVE.
+# ---------------------------------------------------------------------------
+
+
+def _subprocess_streaming_session(
+    requests_then_drain: list[str],
+    *,
+    expected_response_ids: list[int],
+    timeout: float = 30.0,
+) -> dict[int, dict[str, Any]]:
+    """Spawn ``hermes-market serve`` and run an interactive request/response
+    session via the _StreamingMCPClient helper. Used by the live test."""
+
+    proc = subprocess.Popen(
+        [sys.executable, "-m", "hermes_market.cli", "serve", "--log-level", "ERROR"],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        bufsize=1,
+    )
+    if proc.stdin is None or proc.stdout is None:
+        proc.kill()
+        raise RuntimeError("subprocess pipes missing")
+    try:
+        # Send all pre-recorded requests at once. We drain responses by id
+        # in the order the test specifies — that order matches the request
+        # order for our serial use of this helper.
+        proc.stdin.write("".join(line + "\n" for line in requests_then_drain))
+        proc.stdin.flush()
+
+        responses: dict[int, dict[str, Any]] = {}
+        deadline = time.monotonic() + timeout
+        while expected_response_ids and time.monotonic() < deadline:
+            line = proc.stdout.readline()
+            if line == "":
+                break
+            line = line.strip()
+            if not line:
+                continue
+            msg = json.loads(line)
+            if "id" in msg and msg["id"] in expected_response_ids:
+                responses[msg["id"]] = msg
+                expected_response_ids.remove(msg["id"])
+        return responses
+    finally:
+        try:
+            proc.stdin.close()
+        except Exception:  # noqa: BLE001
+            pass
+        try:
+            proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.wait()
+
+
+@pytest.mark.skipif(
+    not os.environ.get("HERMES_RUN_LIVE"),
+    reason="Live network test; set HERMES_RUN_LIVE=1 to enable.",
+)
+def test_live_subprocess_tools_call_quote() -> None:
+    """End-to-end live: spawn ``hermes-market serve``, run a real
+    ``tools/call(quote, 600519)`` against actual providers via the
+    streaming client. Skipped in CI."""
+
+    requests = [
+        _req("initialize", id=1, params={"protocolVersion": MCP_PROTOCOL_VERSION}),
+        _req("notifications/initialized", id=None),
+        _req("tools/call", id=2, params={"name": "quote", "arguments": {"symbol": "600519"}}),
+        _req("shutdown", id=3),
+    ]
+    responses = _subprocess_streaming_session(
+        requests,
+        expected_response_ids=[1, 2, 3],
+        timeout=30.0,
+    )
+    assert responses[1]["result"]["protocolVersion"] == MCP_PROTOCOL_VERSION
+    # The tools/call response wraps the FetchResult envelope in a text content block.
+    call = responses[2]["result"]
+    envelope = json.loads(call["content"][0]["text"])
+    assert envelope["ok"] is True, f"quote failed: {envelope}"
+    assert envelope["symbol"] == "600519"
+    assert isinstance(envelope["data"].get("last"), (int, float))
 
 
 # ---------------------------------------------------------------------------
