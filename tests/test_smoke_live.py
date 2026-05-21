@@ -72,6 +72,37 @@ def test_live_news_cn() -> None:
 
 
 @LIVE_FLAG
+def test_live_quote_with_fundamentals_cn() -> None:
+    """Verify the fundamentals side-channel populates at least PE or PB for an A-share."""
+
+    f = MarketDataFetcher(provider_timeout=4.0, global_deadline=15.0, hedge_delay=0.5)
+    result = f.quote("600519", with_fundamentals=True)
+    assert result.ok, f"price quote failed: {result.errors}"
+    fund = result.data.get("fundamentals") or {}
+    # Tolerate per-provider flakiness: the contract is "at least one of pe_ttm/pb/market_cap arrived".
+    assert any(fund.get(k) is not None for k in ("pe_ttm", "pe_lyr", "pb", "market_cap")), (
+        f"no valuation fields returned: fund={fund}, errors={result.data.get('fundamentals_errors')}"
+    )
+    assert fund.get("source") in {"xueqiu", "akshare_baidu"}
+
+
+@LIVE_FLAG
+def test_live_quote_with_fundamentals_hk() -> None:
+    """HK fundamentals only have one usable free source (xueqiu); allow degraded result."""
+
+    f = MarketDataFetcher(provider_timeout=4.0, global_deadline=15.0, hedge_delay=0.5)
+    result = f.quote("00700", with_fundamentals=True)
+    assert result.ok, f"price quote failed: {result.errors}"
+    fund = result.data.get("fundamentals")
+    if fund is None:
+        # Acceptable on networks where xueqiu HK is blocked; we still must
+        # not have broken the parent price quote.
+        return
+    assert fund["currency"] == "HKD"
+    assert fund.get("source") == "xueqiu"
+
+
+@LIVE_FLAG
 def test_live_batch_quote() -> None:
     """Mixed CN+HK batch should return all 4 items in order, at least 1 ok."""
 

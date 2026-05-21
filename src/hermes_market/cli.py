@@ -24,7 +24,12 @@ import os
 import sys
 from dataclasses import asdict
 
-from .fetcher import DEFAULT_GLOBAL_DEADLINE, DEFAULT_PROVIDER_TIMEOUT, MarketDataFetcher
+from .fetcher import (
+    DEFAULT_GLOBAL_DEADLINE,
+    DEFAULT_PROVIDER_TIMEOUT,
+    DEFAULT_WITH_FUNDAMENTALS,
+    MarketDataFetcher,
+)
 from .models import SCHEMA_VERSION, FetchResult
 from .tool_spec import render as render_tool_spec
 
@@ -71,6 +76,20 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Comma-separated list, e.g. '600519,000001,00700'. Returns a batch envelope.",
     )
     p_quote.add_argument("--market", choices=["cn", "hk"], default=None)
+    fund_group = p_quote.add_mutually_exclusive_group()
+    fund_group.add_argument(
+        "--with-fundamentals",
+        dest="with_fundamentals",
+        action="store_true",
+        help="Attach PE/PB/market_cap to data.fundamentals (default: on).",
+    )
+    fund_group.add_argument(
+        "--no-fundamentals",
+        dest="with_fundamentals",
+        action="store_false",
+        help="Skip the fundamentals side-channel (lowest latency).",
+    )
+    p_quote.set_defaults(with_fundamentals=DEFAULT_WITH_FUNDAMENTALS)
 
     p_hist = sub.add_parser("history", help="Daily K-line history")
     p_hist.add_argument("--symbol", required=True)
@@ -138,7 +157,7 @@ def _emit_error(provider: str, exc: BaseException) -> int:
         "data": {},
         "error": f"{type(exc).__name__}: {exc}",
         "errors": [{"provider": provider, "message": f"{type(exc).__name__}: {exc}"}],
-        "schema_version": 1,
+        "schema_version": SCHEMA_VERSION,
     }
     print(json.dumps(payload, ensure_ascii=False))
     return 2
@@ -168,9 +187,17 @@ def main(argv: list[str] | None = None) -> int:
         if args.cmd == "quote":
             if args.symbols is not None:
                 syms = [s.strip() for s in args.symbols.split(",") if s.strip()]
-                results = fetcher.batch_quote(syms, args.market)
+                results = fetcher.batch_quote(
+                    syms,
+                    args.market,
+                    with_fundamentals=args.with_fundamentals,
+                )
                 return _emit_batch(results)
-            result = fetcher.quote(args.symbol, args.market)
+            result = fetcher.quote(
+                args.symbol,
+                args.market,
+                with_fundamentals=args.with_fundamentals,
+            )
         elif args.cmd == "history":
             result = fetcher.history(args.symbol, args.start, args.end, args.market)
         elif args.cmd == "search":

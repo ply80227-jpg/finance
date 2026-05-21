@@ -206,17 +206,30 @@ HERMES_RUN_LIVE=1 pytest tests/test_smoke_live.py -v
     "last": 1688.0,
     "change_pct": 0.75,
     "turnover": 123456789.0,
-    "timestamp": "2026-05-07T10:00:00Z"
+    "timestamp": "2026-05-07T10:00:00Z",
+    "fundamentals": {
+      "pe_ttm": 19.91,
+      "pe_lyr": 20.05,
+      "pb": 7.82,
+      "ps_ttm": 8.5,
+      "market_cap": 1.65e12,
+      "float_market_cap": 1.65e12,
+      "dividend_yield": 0.012,
+      "currency": "CNY",
+      "as_of": "2026-05-20T10:00:00Z",
+      "source": "xueqiu"
+    }
   },
   "error": null,
   "errors": [],
-  "schema_version": 1
+  "schema_version": 2
 }
 ```
 
 新增字段说明：
 
-- `schema_version`：输出 schema 版本号，未来字段变更时方便上游兼容。
+- `schema_version`：输出 schema 版本号；v2 在 v1 基础上**只新增可选字段**，老版客户端可忽略未知 key。
+- `data.fundamentals`：v2 新增，基本面快照（PE/PB/市值等）。通过双源 hedged 模式从 xueqiu 与 akshare/baidu 并发竞速；任一字段缺失时为 `null`。默认开启；agent 不需要时加 `--no-fundamentals` 关闭可降低延迟。失败不会影响行情主结果，错误记录在 `data.fundamentals_errors`。
 - `errors`：结构化失败列表（每条 `{provider, message}`），失败时记录每一跳 fallback 的报错，便于排障。`error` 字段保留为 `"; "` 拼接的字符串以维持兼容。
 - yfinance 路径的 `turnover` 改为 `last * volume` 的近似值，并额外提供 `volume` 字段；其它 provider 仍直接返回成交额（CNY/HKD）。
 - baostock 路径新增 `data.as_of` 字段，标明 T+1 数据对应的真实交易日。

@@ -9,7 +9,16 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
+"""Output envelope schema version.
+
+* **v1**: original ``{ok, provider, symbol, market, data, error, errors,
+  schema_version}`` shape.
+* **v2** (additive, backwards-compatible): ``data`` may include
+  ``fundamentals: {pe_ttm, pe_lyr, pb, ps_ttm, market_cap, float_market_cap,
+  dividend_yield, currency, as_of, source}`` and ``fundamentals_errors: [{provider,
+  message}]``. Consumers pinned to v1 can ignore the new keys without breaking.
+"""
 
 
 @dataclass

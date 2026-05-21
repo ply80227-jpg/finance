@@ -20,6 +20,8 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Any
 
+from .models import SCHEMA_VERSION
+
 # ---------------------------------------------------------------------------
 # Tool definitions (shared shape; rendered into each framework's wrapper below)
 # ---------------------------------------------------------------------------
@@ -40,6 +42,14 @@ _QUOTE_PARAMS: dict[str, Any] = {
             "type": "string",
             "enum": ["cn", "hk"],
             "description": "Override the auto-detected market. Optional.",
+        },
+        "with_fundamentals": {
+            "type": "boolean",
+            "default": True,
+            "description": (
+                "If true (default), attach PE/PB/market_cap via a hedged xueqiu+akshare race. "
+                "Set to false for absolute minimum latency."
+            ),
         },
     },
     "required": ["symbol"],
@@ -64,6 +74,14 @@ _BATCH_QUOTE_PARAMS: dict[str, Any] = {
             "type": "string",
             "enum": ["cn", "hk"],
             "description": "Force-apply this market to every symbol. Usually omit.",
+        },
+        "with_fundamentals": {
+            "type": "boolean",
+            "default": True,
+            "description": (
+                "Apply the same fundamentals enrichment as `quote` to every item. "
+                "Set to false when you only need prices (faster on large batches)."
+            ),
         },
     },
     "required": ["symbols"],
@@ -145,7 +163,9 @@ _TOOLS: list[dict[str, Any]] = [
         "description": (
             "Fetch a real-time price snapshot for a single A-share or HK stock. "
             "Returns last price, open/high/low/prev_close, volume, turnover, "
-            "as_of, and the provider that served the request."
+            "as_of, and the provider that served the request. When "
+            "`with_fundamentals` is true (default), `data.fundamentals` also "
+            "includes PE TTM, PB, market cap, and dividend yield."
         ),
         "parameters": _QUOTE_PARAMS,
     },
@@ -155,7 +175,7 @@ _TOOLS: list[dict[str, Any]] = [
             "Fetch real-time price snapshots for many symbols concurrently. "
             "Returns a list of per-symbol results; individual failures do not "
             "fail the batch. Use this when comparing positions or building a "
-            "portfolio view in one shot."
+            "portfolio view in one shot. Same `with_fundamentals` flag as quote."
         ),
         "parameters": _BATCH_QUOTE_PARAMS,
     },
@@ -279,8 +299,44 @@ _FETCH_RESULT_SCHEMA: dict[str, Any] = {
                 },
             },
         },
-        "schema_version": {"type": "integer", "const": 1},
+        "schema_version": {"type": "integer", "const": SCHEMA_VERSION},
     },
+}
+
+_FUNDAMENTALS_SCHEMA: dict[str, Any] = {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "title": "Fundamentals",
+    "description": (
+        "Valuation snapshot attached to `data.fundamentals` when "
+        "`with_fundamentals=true`. All numeric fields may be null when the "
+        "upstream source omits them."
+    ),
+    "type": "object",
+    "properties": {
+        "pe_ttm": {"type": ["number", "null"], "description": "Price-to-Earnings (TTM)."},
+        "pe_lyr": {"type": ["number", "null"], "description": "Price-to-Earnings (latest reported year)."},
+        "pb": {"type": ["number", "null"], "description": "Price-to-Book."},
+        "ps_ttm": {"type": ["number", "null"], "description": "Price-to-Sales (TTM); xueqiu only."},
+        "market_cap": {
+            "type": ["number", "null"],
+            "description": "Total market cap in the listing currency (CNY for A-share, HKD for HK).",
+        },
+        "float_market_cap": {
+            "type": ["number", "null"],
+            "description": "Free-float market cap; xueqiu only.",
+        },
+        "dividend_yield": {
+            "type": ["number", "null"],
+            "description": "Trailing 12-month dividend yield (percent); xueqiu only.",
+        },
+        "currency": {"type": ["string", "null"], "enum": ["CNY", "HKD", None]},
+        "as_of": {"type": ["string", "null"], "description": "ISO timestamp when this snapshot was taken."},
+        "source": {
+            "type": "string",
+            "description": "Which provider supplied the bundle: 'xueqiu' or 'akshare_baidu'.",
+        },
+    },
+    "additionalProperties": False,
 }
 
 _BATCH_RESULT_SCHEMA: dict[str, Any] = {
@@ -296,7 +352,7 @@ _BATCH_RESULT_SCHEMA: dict[str, Any] = {
         },
         "count": {"type": "integer", "minimum": 0},
         "items": {"type": "array", "items": {"$ref": "#/$defs/FetchResult"}},
-        "schema_version": {"type": "integer", "const": 1},
+        "schema_version": {"type": "integer", "const": SCHEMA_VERSION},
     },
     "$defs": {"FetchResult": _FETCH_RESULT_SCHEMA},
 }
@@ -327,7 +383,7 @@ _SEARCH_RESULT_SCHEMA: dict[str, Any] = {
                 },
             },
         },
-        "schema_version": {"type": "integer", "const": 1},
+        "schema_version": {"type": "integer", "const": SCHEMA_VERSION},
     },
 }
 
@@ -341,6 +397,7 @@ def get_output_schemas() -> dict[str, dict[str, Any]]:
         "history": deepcopy(_FETCH_RESULT_SCHEMA),
         "news": deepcopy(_FETCH_RESULT_SCHEMA),
         "search": deepcopy(_SEARCH_RESULT_SCHEMA),
+        "fundamentals": deepcopy(_FUNDAMENTALS_SCHEMA),
     }
 
 
