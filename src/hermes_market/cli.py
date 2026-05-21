@@ -115,6 +115,29 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Which framework's tool schema to emit (default: openai).",
     )
 
+    p_serve = sub.add_parser(
+        "serve",
+        help="Run as a long-lived MCP server (stdio JSON-RPC). Reuses one fetcher across calls.",
+    )
+    p_serve.add_argument(
+        "--transport",
+        choices=["stdio"],
+        default="stdio",
+        help="Wire protocol (only stdio is currently supported).",
+    )
+    p_serve.add_argument(
+        "--max-workers",
+        type=int,
+        default=8,
+        help="Bound on concurrent tool-call worker threads (default: 8).",
+    )
+    p_serve.add_argument(
+        "--log-level",
+        default="INFO",
+        choices=["DEBUG", "INFO", "WARNING", "ERROR"],
+        help="Server log level (logs to stderr; default: INFO).",
+    )
+
     return parser
 
 
@@ -177,6 +200,23 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "tools":
         print(json.dumps(render_tool_spec(args.format), ensure_ascii=False))
         return 0
+
+    # ``serve`` hands control to the long-lived MCP server. The server
+    # builds its own MarketDataFetcher on first ``tools/call`` so the
+    # ``initialize`` handshake stays fast.
+    if args.cmd == "serve":
+        from .server import main as serve_main
+
+        return serve_main(
+            [
+                "--transport",
+                args.transport,
+                "--max-workers",
+                str(args.max_workers),
+                "--log-level",
+                args.log_level,
+            ]
+        )
 
     try:
         fetcher = MarketDataFetcher(

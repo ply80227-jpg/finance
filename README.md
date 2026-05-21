@@ -116,6 +116,10 @@ hermes-market search --query tencent --market hk
 hermes-market tools --format openai     > tools/hermes_openai.json
 hermes-market tools --format anthropic  > tools/hermes_anthropic.json
 hermes-market tools --format mcp        > tools/hermes_mcp.json
+
+# 长驻 MCP server(stdio JSON-RPC): 跨调用复用 fetcher、共享 TTL cache、
+# 并发请求 single-flight 去重。akshare / xueqiu cookie 等冷启动开销只付一次。
+hermes-market serve
 ```
 
 ## Agent Integration
@@ -154,6 +158,37 @@ resp = openai.chat.completions.create(
 
 工具描述每次发版会同步更新; CI 会校验 `tools/*.json` 文件与 `tool_spec.py`
 保持一致(避免改了 spec 但忘记同步)。
+
+### MCP server 模式 (推荐用于 agent 长会话)
+
+`hermes-market serve` 把同一个 `MarketDataFetcher` 跑成一个长驻 stdio
+JSON-RPC 进程,符合 [Model Context Protocol](https://spec.modelcontextprotocol.io/)
+规范,可以直接挂进 Claude Desktop / Cursor / 任意 MCP 客户端:
+
+```jsonc
+// claude_desktop_config.json
+{
+  "mcpServers": {
+    "hermes-market": {
+      "command": "hermes-market",
+      "args": ["serve"]
+    }
+  }
+}
+```
+
+与每次 shell-out 调用 CLI 相比:
+
+- akshare / xueqiu cookie 等冷启动 (~1-2s) 只付一次,不是每次工具调用都付
+- 进程内 TTL 缓存 (`cache.py`) 真正生效,同一会话内重复查同一只股票直接命中
+- single-flight 去重: agent 并发 fan-out 同名同参数的工具调用,只触发一次上游请求
+- 5 个工具 (`quote` / `batch_quote` / `history` / `news` / `search`)
+  在 `tools/list` 一次性暴露给 host
+
+支持的 MCP 方法: `initialize`、`notifications/initialized`、`ping`、
+`tools/list`、`tools/call`、`resources/list`、`resources/read`(后者用于
+拉取 `output_schemas`)、以及可选的 `shutdown`。stdio 协议保留 stdout
+只走 JSON-RPC,日志统一到 stderr。
 
 ## Benchmarks
 
