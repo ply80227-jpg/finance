@@ -9,7 +9,7 @@ import pytest
 
 from hermes_market import cli
 from hermes_market import fetcher as fetcher_mod
-from hermes_market.models import FetchResult
+from hermes_market.models import SCHEMA_VERSION, FetchResult
 
 
 def test_main_emits_failure_json_on_unknown_symbol(
@@ -32,7 +32,7 @@ def test_main_emits_failure_json_on_unknown_symbol(
     parsed: dict[str, Any] = json.loads(out)
     assert rc == 2
     assert parsed["ok"] is False
-    assert parsed["schema_version"] == 1
+    assert parsed["schema_version"] == SCHEMA_VERSION
     assert parsed["provider"] in {"cli", "none"}
 
 

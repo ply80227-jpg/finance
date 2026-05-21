@@ -11,6 +11,7 @@ from __future__ import annotations
 import concurrent.futures as cf
 from collections.abc import Callable
 
+from .enricher import enrich_fundamentals
 from .models import FetchResult, fail_result
 from .normalize import detect_market, normalize_symbol
 from .providers import (
@@ -32,6 +33,10 @@ from .symbol_index import search as _search_rows
 # while pathological hangs cannot blow past the budget.
 DEFAULT_PROVIDER_TIMEOUT = 6.0
 DEFAULT_GLOBAL_DEADLINE = 20.0
+# Fundamentals are enabled by default — they are cheap (a single xueqiu RTT
+# in the happy path) and answer the next obvious follow-up question ("PE?").
+# Callers who care about absolute floor latency can pass ``with_fundamentals=False``.
+DEFAULT_WITH_FUNDAMENTALS = True
 
 
 class MarketDataFetcher:
@@ -86,7 +91,13 @@ class MarketDataFetcher:
         return _f
 
     # ------------------------------------------------------------------ quote
-    def quote(self, symbol: str, market: str | None = None) -> FetchResult:
+    def quote(
+        self,
+        symbol: str,
+        market: str | None = None,
+        *,
+        with_fundamentals: bool = DEFAULT_WITH_FUNDAMENTALS,
+    ) -> FetchResult:
         mkt = detect_market(symbol, market)
         sym = normalize_symbol(symbol, mkt)
 
@@ -116,7 +127,33 @@ class MarketDataFetcher:
             attempts.append(("stooq", lambda: stooq_provider.quote(self.stooq, sym, mkt)))
         else:
             attempts.append(("stooq", self._missing("stooq")))
-        return self._run(attempts, sym, mkt)
+        result = self._run(attempts, sym, mkt)
+        if with_fundamentals and result.ok:
+            self._attach_fundamentals(result)
+        return result
+
+    # ---------------------------------------------------- fundamentals enrichment
+    def _attach_fundamentals(self, result: FetchResult) -> None:
+        """Best-effort: enrich ``result.data`` with PE/PB/market_cap in place.
+
+        Failures are recorded under ``data['fundamentals_errors']`` so callers
+        can audit, but they never demote ``result.ok``.
+        """
+
+        try:
+            fund, errors = enrich_fundamentals(
+                xq=self.xq,
+                ak=self.ak,
+                sym=result.symbol,
+                market=result.market,
+            )
+        except Exception as exc:  # noqa: BLE001 - never fail the parent quote
+            result.data["fundamentals_errors"] = [{"provider": "enricher", "message": f"{type(exc).__name__}: {exc}"}]
+            return
+        if fund is not None:
+            result.data["fundamentals"] = fund
+        if errors:
+            result.data["fundamentals_errors"] = errors
 
     # ---------------------------------------------------------------- history
     def history(self, symbol: str, start: str, end: str, market: str | None = None) -> FetchResult:
@@ -175,6 +212,7 @@ class MarketDataFetcher:
         market: str | None = None,
         *,
         max_workers: int = 8,
+        with_fundamentals: bool = DEFAULT_WITH_FUNDAMENTALS,
     ) -> list[FetchResult]:
         """Fetch quotes for many symbols concurrently.
 
@@ -194,7 +232,7 @@ class MarketDataFetcher:
         def _one(idx_sym: tuple[int, str]) -> tuple[int, FetchResult]:
             idx, sym = idx_sym
             try:
-                return idx, self.quote(sym, market)
+                return idx, self.quote(sym, market, with_fundamentals=with_fundamentals)
             except Exception as exc:  # noqa: BLE001
                 return idx, fail_result(
                     "none",

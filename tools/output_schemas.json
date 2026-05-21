@@ -64,7 +64,7 @@
       },
       "schema_version": {
         "type": "integer",
-        "const": 1
+        "const": 2
       }
     }
   },
@@ -96,7 +96,7 @@
       },
       "schema_version": {
         "type": "integer",
-        "const": 1
+        "const": 2
       }
     },
     "$defs": {
@@ -165,7 +165,7 @@
           },
           "schema_version": {
             "type": "integer",
-            "const": 1
+            "const": 2
           }
         }
       }
@@ -236,7 +236,7 @@
       },
       "schema_version": {
         "type": "integer",
-        "const": 1
+        "const": 2
       }
     }
   },
@@ -305,7 +305,7 @@
       },
       "schema_version": {
         "type": "integer",
-        "const": 1
+        "const": 2
       }
     }
   },
@@ -366,8 +366,88 @@
       },
       "schema_version": {
         "type": "integer",
-        "const": 1
+        "const": 2
       }
     }
+  },
+  "fundamentals": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "title": "Fundamentals",
+    "description": "Valuation snapshot attached to `data.fundamentals` when `with_fundamentals=true`. All numeric fields may be null when the upstream source omits them.",
+    "type": "object",
+    "properties": {
+      "pe_ttm": {
+        "type": [
+          "number",
+          "null"
+        ],
+        "description": "Price-to-Earnings (TTM)."
+      },
+      "pe_lyr": {
+        "type": [
+          "number",
+          "null"
+        ],
+        "description": "Price-to-Earnings (latest reported year)."
+      },
+      "pb": {
+        "type": [
+          "number",
+          "null"
+        ],
+        "description": "Price-to-Book."
+      },
+      "ps_ttm": {
+        "type": [
+          "number",
+          "null"
+        ],
+        "description": "Price-to-Sales (TTM); xueqiu only."
+      },
+      "market_cap": {
+        "type": [
+          "number",
+          "null"
+        ],
+        "description": "Total market cap in the listing currency (CNY for A-share, HKD for HK)."
+      },
+      "float_market_cap": {
+        "type": [
+          "number",
+          "null"
+        ],
+        "description": "Free-float market cap; xueqiu only."
+      },
+      "dividend_yield": {
+        "type": [
+          "number",
+          "null"
+        ],
+        "description": "Trailing 12-month dividend yield (percent); xueqiu only."
+      },
+      "currency": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "enum": [
+          "CNY",
+          "HKD",
+          null
+        ]
+      },
+      "as_of": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "ISO timestamp when this snapshot was taken."
+      },
+      "source": {
+        "type": "string",
+        "description": "Which provider supplied the bundle: 'xueqiu' or 'akshare_baidu'."
+      }
+    },
+    "additionalProperties": false
   }
 }

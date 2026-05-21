@@ -67,8 +67,11 @@ class TestToolSpec:
     def test_output_schemas_have_required_envelopes(self) -> None:
         schemas = get_output_schemas()
         assert set(schemas) >= EXPECTED_NAMES
-        # Every envelope must require ok + schema_version, no exception.
-        for name, sch in schemas.items():
+        # Every *envelope* must require ok + schema_version, no exception.
+        # Non-envelope fragments (e.g. ``fundamentals``) are intentionally
+        # exempt — they are reusable sub-schemas referenced from ``data``.
+        for name in EXPECTED_NAMES:
+            sch = schemas[name]
             assert "ok" in sch["required"], name
             assert "schema_version" in sch["required"], name
 

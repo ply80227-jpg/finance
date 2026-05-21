@@ -40,7 +40,13 @@ class TestBatchQuote:
     def test_preserves_order(self, monkeypatch: pytest.MonkeyPatch) -> None:
         f = _new_fetcher(monkeypatch)
 
-        def fake_quote(self: Any, sym: str, market: str | None = None) -> FetchResult:
+        def fake_quote(
+            self: Any,
+            sym: str,
+            market: str | None = None,
+            *,
+            with_fundamentals: bool = True,
+        ) -> FetchResult:
             # Reverse the sleep order so iteration order is decoupled from
             # arrival order; output must still match input order.
             sleep_for = {"a": 0.05, "b": 0.0, "c": 0.02}.get(sym, 0)
@@ -58,7 +64,13 @@ class TestBatchQuote:
         peak = 0
         lock = threading.Lock()
 
-        def fake_quote(self: Any, sym: str, market: str | None = None) -> FetchResult:
+        def fake_quote(
+            self: Any,
+            sym: str,
+            market: str | None = None,
+            *,
+            with_fundamentals: bool = True,
+        ) -> FetchResult:
             nonlocal live, peak
             with lock:
                 live += 1
@@ -80,7 +92,13 @@ class TestBatchQuote:
     def test_partial_failure_does_not_abort_batch(self, monkeypatch: pytest.MonkeyPatch) -> None:
         f = _new_fetcher(monkeypatch)
 
-        def fake_quote(self: Any, sym: str, market: str | None = None) -> FetchResult:
+        def fake_quote(
+            self: Any,
+            sym: str,
+            market: str | None = None,
+            *,
+            with_fundamentals: bool = True,
+        ) -> FetchResult:
             if sym == "boom":
                 raise RuntimeError("simulated provider blowup")
             return _ok(sym)
