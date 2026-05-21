@@ -1,6 +1,9 @@
 repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.4.10
+    # Keep in sync with CI (.github/workflows/ci.yml installs `ruff>=0.4`,
+    # which currently resolves to 0.15.x). Older pinned versions disagree
+    # on `assert ...` line-wrap style and cause CI/local format drift.
+    rev: v0.15.13
     hooks:
       - id: ruff
         args: [--fix]

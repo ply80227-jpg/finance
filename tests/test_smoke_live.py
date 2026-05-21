@@ -80,9 +80,9 @@ def test_live_quote_with_fundamentals_cn() -> None:
     assert result.ok, f"price quote failed: {result.errors}"
     fund = result.data.get("fundamentals") or {}
     # Tolerate per-provider flakiness: the contract is "at least one of pe_ttm/pb/market_cap arrived".
-    assert any(
-        fund.get(k) is not None for k in ("pe_ttm", "pe_lyr", "pb", "market_cap")
-    ), f"no valuation fields returned: fund={fund}, errors={result.data.get('fundamentals_errors')}"
+    assert any(fund.get(k) is not None for k in ("pe_ttm", "pe_lyr", "pb", "market_cap")), (
+        f"no valuation fields returned: fund={fund}, errors={result.data.get('fundamentals_errors')}"
+    )
     assert fund.get("source") in {"xueqiu", "akshare_baidu"}
 
 
